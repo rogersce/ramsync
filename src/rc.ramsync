@@ -1,0 +1,121 @@
+#!/bin/bash
+. /etc/rc.conf
+. /etc/rc.d/functions
+. /etc/ramsync.conf
+
+set_dir_vars() {
+    USER=$(stat -c %U $DIR)
+    BACKUP=$BACKUP_DIR/$DIR
+}
+
+sync_start() {
+        for DIR in $DIRS; do
+            set_dir_vars
+            if [[ ! -e $DIR || -h $DIR ]]; then
+            #if [[ -h $DIR ]]; then
+                #if [[ -e $DIR/.tmpfs ]]; then
+                #    #last time a bad exit but data still exists on tmpfs. use it as freshest copy
+                #    su -c "rsync -a --delete --exclude .tmpfs $DIR $BACKUP" $USER
+                #else if [[ -e $BACKUP ]]; then
+                #    #tmpfs copy lost but backup exists. restore it and proceed.
+                #    rm -f $DIR
+                #    ln -s $VOLATILE/$DIR $DIR
+                #    touch $DIR/.tmpfs
+                #    su -c "rsync -a $BACKUP/ $DIR/" $USER
+                #else
+                #    #if no backup folder then user trying to locate a physical symlinked dir to tmpfs, error out
+                #    printf "\n${C_FAIL}Error:${C_CLEAR} Backing up symlink dirs to tmpfs unsupported."
+                #    stat_fail && exit 1
+                #fi
+                
+                printf "\n${C_FAIL}Error:${C_CLEAR} Directory does not exist or is a symlink."
+                stat_fail && exit 1
+            else
+                #last time was a good exit
+                mv $DIR $BACKUP
+                ln -s $VOLATILE/$DIR $DIR
+                #touch $DIR/.tmpfs #todo: put these flags in a root-only directory so user doesnt see them. same place as backups
+                su -c "rsync -a $BACKUP/ $DIR/" $USER
+            fi
+        done
+}
+
+sync() {
+        for DIR in $DIRS; do
+            set_dir_vars
+            su -c "rsync -a --delete --exclude .tmpfs $DIR $BACKUP" $USER
+        done
+}
+
+sync_stop() {
+        sync
+
+	# restore virgin state of profiles on physical discs
+	for DIR in $DIRS; do
+            set_dir_vars
+            rm -f $DIR
+            mv $BACKUP $DIR
+            rm -rf $VOLATILE/ramsync/$DIR
+	done
+}
+
+case "$1" in
+	start)
+		stat_busy 'Starting Ramsync-Daemon'
+		if [[ -z $DIRS ]]; then
+			printf "\n${C_FAIL}Error:${C_CLEAR} Define at least one directory in /etc/ramsync.conf"
+			stat_fail && exit 1
+		fi
+
+		for i in $DIRS; do
+			if [[ ! -d $i ]]; then
+				printf "\n${C_FAIL}Error:${C_CLEAR} Invalid directory defined in /etc/ramsync.conf"
+				stat_fail && exit 1
+			fi
+		done
+
+		if [[ -f /run/daemons/ramsync ]]; then
+			printf "\n${C_FAIL}Error:${C_CLEAR} Ramsync-Daemon is already running!"
+			stat_fail && exit 1
+		fi
+                
+                sync_start
+		add_daemon ramsync
+		stat_done
+		;;
+	stop)
+		stat_busy 'Stopping Ramsync-Daemon'
+		if [[ ! -f /run/daemons/ramsync ]]; then
+			printf "\n${C_FAIL}Error:${C_CLEAR} Ramsync-Daemon is not running, nothing to stop!"
+			stat_fail
+		else
+                        sync_stop
+			rm_daemon ramsync
+			stat_done
+		fi
+		;;
+	sync)
+		stat_busy 'Syncing directories in tmpfs to physical disc'
+		if [[ ! -f /run/daemons/ramsync ]]; then
+			printf "\n${C_FAIL}Error:${C_CLEAR} Ramsync-Daemon is not running... cannot sync!"
+			stat_fail
+		else
+			sync
+			stat_done
+		fi
+		;;	
+	restart)
+		# restart really has no meaning in the traditional sense
+		stat_busy 'Syncing directories in tmpfs to physical disc'
+		if [[ ! -f /run/daemons/ramsync ]]; then
+			printf "\n${C_FAIL}Error:${C_CLEAR} Ramsync-Daemon is not running... cannot sync!"
+			stat_fail
+		else
+			sync
+			stat_done
+		fi
+		;;
+	*)
+		echo "usage $0 {start|stop|sync|restart}"
+esac
+exit 0
