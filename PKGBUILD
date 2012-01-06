@@ -1,23 +1,21 @@
-# Maintainer: graysky <graysky AT archlinux DOT us>
+# Maintainer: rogersce <carl DOT rogers AT gmail DOT com>
 
 pkgname='ramsync'
 pkgver=1.0
 pkgrel=1
-pkgdesc='Symlinks and syncs dirs to RAM thus reducing HDD/SDD calls and speeding up apps.'
+pkgdesc='Links and syncs dirs to RAM'
 arch=('any')
 #url='https://wiki.archlinux.org/index.php/Ramsync'
 license=('GPL')
 depends=('rsync')
 optdepends=('cron: allow hourly (default) or periodic syncs of tmpfs <--> HDD/SDD storage')
 conflicts=('firefox-sync' 'firefox-tmpfs-daemon' 'chromium-tmpfs' 'tmpfs-store')
-#replaces=('sync-browsers-daemon')
-source="https://github.com/rogersce/ramsync-daemon/raw/master/$pkgname-source.tar.xz"
+source="https://github.com/rogersce/ramsync/tarball/v$pkgver"
 backup=("etc/$pkgname.conf")
-install=readme.install
-sha256sums=('6530662ab35b96f9f715a211d76efe92eeb9e9f926c905965a574cd561dcd6ce')
-
+sha256sums=('d3032c42903844580d101ee3dae056ca58b50d6a7bf1170cfb52bda66d55d9b5')
 package() {
-	cd "$srcdir/src"
+	mv $srcdir/rogersce* $srcdir/$pkgname
+        cd $srcdir/$pkgname/src
 	install -Dm644 $pkgname.conf "$pkgdir/etc/$pkgname.conf"
 	install -Dm755 rc.$pkgname "$pkgdir/etc/rc.d/$pkgname"
 	install -Dm755 $pkgname.cron.hourly "$pkgdir/etc/cron.hourly/$pkgname-update"
