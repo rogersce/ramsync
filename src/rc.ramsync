@@ -3,14 +3,8 @@
 . /etc/rc.d/functions
 . /etc/ramsync.conf
 
-set_dir_vars() {
-    USER=$(stat -c %U $DIR)
-    BACKUP=$BACKUP_DIR/$DIR
-}
-
 sync_start() {
         for DIR in $DIRS; do
-            set_dir_vars
             if [[ ! -e $DIR || -h $DIR ]]; then
             #if [[ -h $DIR ]]; then
                 #if [[ -e $DIR/.tmpfs ]]; then
@@ -32,21 +26,20 @@ sync_start() {
                 stat_fail && exit 1
             else
                 #last time was a good exit
-                mkdir -p $BACKUP
-                mv $DIR $BACKUP
+                DEST=`dirname $BACKUP_DIR/$DIR`
+                mkdir -p $DEST
+                mv $DIR $DEST
                 ln -s $VOLATILE/$DIR $DIR
                 mkdir -p $VOLATILE/$DIR
+                rsync -a $BACKUP_DIR/$DIR/ $DIR/
                 #touch $DIR/.tmpfs #todo: put these flags in a root-only directory so user doesnt see them. same place as backups
-                rsync -a $BACKUP/ $DIR/
-                #su -c "rsync -a $BACKUP/ $DIR/" $USER
             fi
         done
 }
 
 sync() {
         for DIR in $DIRS; do
-            set_dir_vars
-            rsync -a --delete --exclude .tmpfs $DIR/ $BACKUP
+            rsync -a --delete --exclude .tmpfs $DIR/ $BACKUP_DIR/$DIR/
         done
 }
 
@@ -55,9 +48,8 @@ sync_stop() {
 
 	# restore virgin state of profiles on physical discs
 	for DIR in $DIRS; do
-            set_dir_vars
             rm -f $DIR
-            mv $BACKUP $DIR
+            mv $BACKUP_DIR/$DIR $DIR
             rm -rf $VOLATILE/$DIR
 	done
 }
