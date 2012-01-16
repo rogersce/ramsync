@@ -5,11 +5,10 @@
 
 set_dir_vars() {
     USER=$(stat -c %U $DIR)
+    BACKUP=$BACKUP_DIR/$DIR
 }
 
 sync_start() {
-        [[ ! -d $BACKUP_DIR ]] && mkdir -p $BACKUP_DIR
-        
         for DIR in $DIRS; do
             set_dir_vars
             if [[ ! -e $DIR || -h $DIR ]]; then
@@ -33,12 +32,13 @@ sync_start() {
                 stat_fail && exit 1
             else
                 #last time was a good exit
-                [[ ! -d $VOLATILE/$DIR ]] && su -c "mkdir -p $VOLATILE/$DIR" $USER
-                mkdir -p $BACKUP_DIR/$(dirname $DIR)
-                mv $DIR $BACKUP_DIR/$(dirname $DIR)
+                mkdir -p $BACKUP
+                mv $DIR $BACKUP
                 ln -s $VOLATILE/$DIR $DIR
-                cp -a $BACKUP_DIR/$DIR/* $DIR
+                mkdir -p $VOLATILE/$DIR
                 #touch $DIR/.tmpfs #todo: put these flags in a root-only directory so user doesnt see them. same place as backups
+                rsync -a $BACKUP/ $DIR/
+                #su -c "rsync -a $BACKUP/ $DIR/" $USER
             fi
         done
 }
@@ -46,18 +46,18 @@ sync_start() {
 sync() {
         for DIR in $DIRS; do
             set_dir_vars
-            su -c "rsync -a --delete --exclude .tmpfs $DIR/ $BACKUP_DIR/$DIR" $USER
+            rsync -a --delete --exclude .tmpfs $DIR/ $BACKUP
         done
 }
 
 sync_stop() {
         sync
 
-	#restore virgin state of profiles on physical discs
+	# restore virgin state of profiles on physical discs
 	for DIR in $DIRS; do
             set_dir_vars
             rm -f $DIR
-            mv $BACKUP_DIR/$DIR $DIR
+            mv $BACKUP $DIR
             rm -rf $VOLATILE/$DIR
 	done
 }
